@@ -1,0 +1,43 @@
+# Saves WoW Forever auction house 110's snapshots while the PC is off.
+# Blizzard posts one at about :26 each hour and keeps no history; running at :37 and :07 gives
+# each snapshot two chances when GitHub starts a scheduled run late or skips one. Each run's
+# snapshots are kept 5 days as an artifact named <house>-<UTC time>; the PC's recorder fetches
+# the ones it missed (tools/ah_cloud_sync.py in the wow project).
+name: record
+on:
+  schedule:
+    - cron: "37,7 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: record
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the current snapshots
+        id: fetch
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+        run: |
+          mkdir -p data/ah-history
+          echo '{"house": 110}' > data/ah-history/state.json
+          status=0
+          python3 -I tools/ah_recorder.py || status=$?
+          cat data/ah-history/recorder.log || true
+          newest=$(ls data/ah-history/ | sed -nE 's/^110-(auctions|commodities)-([0-9]{8}T[0-9]{6}Z)\.json\.gz$/\2/p' | sort | tail -1)
+          if [ -z "$newest" ]; then echo "No snapshot saved"; exit 1; fi
+          echo "name=110-$newest" >> "$GITHUB_OUTPUT"
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: steps.fetch.outputs.name != ''
+        with:
+          name: ${{ steps.fetch.outputs.name }}
+          path: data/ah-history/*.json.gz
+          retention-days: 5
+          compression-level: 0
+          overwrite: true

@@ -1,0 +1,1 @@
+Records WoW Forever auction house 110's hourly snapshots on GitHub Actions, so hours are kept while the PC is off. tools/ah_recorder.py is a copy of the wow project's; the PC fetches the artifacts with tools/ah_cloud_sync.py.
